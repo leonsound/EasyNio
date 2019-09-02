@@ -5,6 +5,7 @@ import java.nio.channels.ClosedChannelException;
 import java.nio.channels.SelectableChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
+import java.util.Iterator;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
@@ -24,6 +25,7 @@ public class NioProcessor {
 	private final Queue<NioSession> newSessions = new ConcurrentLinkedQueue<>();
 	private ReadWriteLock selectorLock = new ReentrantReadWriteLock();
 	protected AtomicBoolean wakeupCalled = new AtomicBoolean(false);
+	private final Queue<NioSession> flushingSessions = new ConcurrentLinkedQueue<>();
 
 	private void startupProcessor() {
 		Processor processor = processorRef.get();
@@ -60,6 +62,16 @@ public class NioProcessor {
 		// can be activated immediately.
 		wakeup();
 	}
+	
+    protected boolean isReadable(NioSession session) {
+        SelectionKey key = session.getKey();
+        return (key != null) && key.isValid() && key.isReadable();
+    }
+
+    protected boolean isWritable(NioSession session) {
+        SelectionKey key = session.getKey();
+        return (key != null) && key.isValid() && key.isWritable();
+    }
 
 	private class Processor implements Runnable {
 
@@ -92,7 +104,21 @@ public class NioProcessor {
 				}
 
 				if (selected > 0) {
-					process();
+					for (Iterator<SelectionKey> i = selector.selectedKeys().iterator(); i.hasNext();) {
+						SelectionKey key = i.next();
+						NioSession session = (NioSession) key.attachment();
+						if (isReadable(session) && !session.isReadSuspended()) {
+							read(session);
+						}
+
+						// Process writes
+						if (isWritable(session) && !session.isWriteSuspended() 
+								&& session.setScheduledForFlush(true)) {
+							// add the session to the queue, if it's not already there
+							flushingSessions.add(session);
+						}
+						i.remove();
+					}
 				}
 
 			}

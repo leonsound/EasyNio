@@ -18,6 +18,8 @@ public class NioSession {
 
 	/** The SelectionKey used for this session */
 	private SelectionKey key;
+    private boolean readSuspended = false;
+    private boolean writeSuspended = false;
 	
 	private final ConcurrentHashMap<Object, Object> attributes = new ConcurrentHashMap<>(4);
 	 /** A queue to store incoming write requests */
@@ -68,6 +70,22 @@ public class NioSession {
 
 	public ConcurrentHashMap<Object, Object> getAttributes() {
 		return attributes;
+	}
+
+	public boolean isReadSuspended() {
+		return readSuspended;
+	}
+
+	public void setReadSuspended(boolean readSuspended) {
+		this.readSuspended = readSuspended;
+	}
+
+	public boolean isWriteSuspended() {
+		return writeSuspended;
+	}
+
+	public void setWriteSuspended(boolean writeSuspended) {
+		this.writeSuspended = writeSuspended;
 	}
 	
 	
